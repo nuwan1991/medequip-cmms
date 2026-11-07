@@ -1,0 +1,36 @@
+# Local development services: PostgreSQL + MinIO (S3-compatible file storage).
+# Usage: docker compose -f infra/docker-compose.yml up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: medequip
+      POSTGRES_PASSWORD: medequip
+      POSTGRES_DB: medequip
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U medequip']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: medequip
+      MINIO_ROOT_PASSWORD: medequip-secret
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - miniodata:/data
+
+volumes:
+  pgdata:
+  miniodata:

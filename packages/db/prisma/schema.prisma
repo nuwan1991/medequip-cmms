@@ -1,0 +1,312 @@
+// MedEquip database schema.
+//
+// Rules (see CLAUDE.md):
+// - UUID primary keys everywhere (records from different sites must never collide when syncing).
+// - Every tenant-owned table has organization_id (and site_id where it belongs to a hospital).
+// - Sync/audit columns: created_at, updated_at, version, deleted_at (soft delete).
+// - Shared library rows (manufacturers, device models) have organization_id = NULL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums (keep in sync with packages/shared)
+// ---------------------------------------------------------------------------
+
+enum PlanCode {
+  FREE
+  PROFESSIONAL
+  FLEET
+  ENTERPRISE
+}
+
+enum OrganizationStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  READ_ONLY
+  SUSPENDED
+  CLOSED
+}
+
+enum Role {
+  ORG_ADMIN
+  BIOMED_ENGINEER
+  TECHNICIAN
+  DEPT_HEAD
+  CLINICAL_USER
+  VIEWER
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum LocationType {
+  BUILDING
+  FLOOR
+  DEPARTMENT
+  ROOM
+  STORE
+}
+
+enum AssetStatus {
+  IN_SERVICE
+  UNDER_MAINTENANCE
+  OUT_OF_SERVICE
+  QUARANTINED
+  CONDEMNED
+  DISPOSED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  LIFE_SUPPORT
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  RESTORE
+  LOGIN
+  EXPORT
+}
+
+// ---------------------------------------------------------------------------
+// Subscription / tenancy
+// ---------------------------------------------------------------------------
+
+model Plan {
+  id                   String   @id @default(uuid()) @db.Uuid
+  code                 PlanCode @unique
+  name                 String
+  priceMonthlyUsdCents Int?     @map("price_monthly_usd_cents")
+  /// { limits: {...}, features: {...} } - see packages/shared/src/plans.ts
+  entitlements         Json
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  organizations Organization[]
+
+  @@map("plans")
+}
+
+model Organization {
+  id          String             @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String             @unique
+  planId      String             @map("plan_id") @db.Uuid
+  status      OrganizationStatus @default(TRIAL)
+  trialEndsAt DateTime?          @map("trial_ends_at")
+  /// Data residency region, e.g. "local", "eu", "me", "ap"
+  region      String             @default("local")
+  /// Per-tenant overrides of plan entitlements (custom deals, promos)
+  entitlementOverrides Json?     @map("entitlement_overrides")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  version     Int                @default(1)
+  deletedAt   DateTime?          @map("deleted_at")
+
+  plan          Plan           @relation(fields: [planId], references: [id])
+  sites         Site[]
+  users         User[]
+  locations     Location[]
+  manufacturers Manufacturer[]
+  deviceModels  DeviceModel[]
+  assets        Asset[]
+  auditLogs     AuditLog[]
+
+  @@map("organizations")
+}
+
+/// A hospital / clinic belonging to an organization (hospital group).
+model Site {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String
+  code           String
+  address        String?
+  timezone       String    @default("UTC")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  version        Int       @default(1)
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  locations    Location[]
+  assets       Asset[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("sites")
+}
+
+model User {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @map("organization_id") @db.Uuid
+  email          String
+  name           String
+  role           Role       @default(VIEWER)
+  status         UserStatus @default(INVITED)
+  /// Null when authentication is delegated to SSO / external identity provider
+  passwordHash   String?    @map("password_hash")
+  lastLoginAt    DateTime?  @map("last_login_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+  version        Int        @default(1)
+  deletedAt      DateTime?  @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Locations: site -> building -> floor -> department -> room
+// ---------------------------------------------------------------------------
+
+model Location {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  siteId         String       @map("site_id") @db.Uuid
+  parentId       String?      @map("parent_id") @db.Uuid
+  type           LocationType
+  name           String
+  code           String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  version        Int          @default(1)
+  deletedAt      DateTime?    @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  site         Site         @relation(fields: [siteId], references: [id])
+  parent       Location?    @relation("LocationTree", fields: [parentId], references: [id])
+  children     Location[]   @relation("LocationTree")
+  assets       Asset[]
+
+  @@index([organizationId, siteId])
+  @@map("locations")
+}
+
+// ---------------------------------------------------------------------------
+// Device library (organizationId NULL = shared global library)
+// ---------------------------------------------------------------------------
+
+model Manufacturer {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+  name           String
+  website        String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  version        Int       @default(1)
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  deviceModels DeviceModel[]
+
+  @@index([organizationId])
+  @@map("manufacturers")
+}
+
+model DeviceModel {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String?   @map("organization_id") @db.Uuid
+  manufacturerId   String    @map("manufacturer_id") @db.Uuid
+  name             String
+  /// Device category, e.g. "Infusion pump", "Patient monitor"
+  category         String
+  /// GMDN / UMDNS nomenclature code
+  nomenclatureCode String?   @map("nomenclature_code")
+  defaultRiskLevel RiskLevel @default(MEDIUM) @map("default_risk_level")
+  /// Default preventive maintenance interval in months (null = no scheduled PM)
+  pmIntervalMonths Int?      @map("pm_interval_months")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  version          Int       @default(1)
+  deletedAt        DateTime? @map("deleted_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  manufacturer Manufacturer  @relation(fields: [manufacturerId], references: [id])
+  assets       Asset[]
+
+  @@index([organizationId])
+  @@index([manufacturerId])
+  @@map("device_models")
+}
+
+// ---------------------------------------------------------------------------
+// Assets (the medical equipment register)
+// ---------------------------------------------------------------------------
+
+model Asset {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @map("organization_id") @db.Uuid
+  siteId         String      @map("site_id") @db.Uuid
+  locationId     String?     @map("location_id") @db.Uuid
+  modelId        String      @map("model_id") @db.Uuid
+  /// Hospital inventory / barcode / QR tag number
+  assetTag       String      @map("asset_tag")
+  serialNumber   String?     @map("serial_number")
+  /// GS1 Unique Device Identifier
+  udi            String?
+  status         AssetStatus @default(IN_SERVICE)
+  riskLevel      RiskLevel   @default(MEDIUM) @map("risk_level")
+  purchaseDate   DateTime?   @map("purchase_date") @db.Date
+  purchaseCost   Decimal?    @map("purchase_cost") @db.Decimal(14, 2)
+  warrantyEndsAt DateTime?   @map("warranty_ends_at") @db.Date
+  commissionedAt DateTime?   @map("commissioned_at") @db.Date
+  notes          String?
+  /// Site where this record was created (hybrid sync ownership)
+  originSiteId   String?     @map("origin_site_id") @db.Uuid
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+  version        Int         @default(1)
+  deletedAt      DateTime?   @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  site         Site         @relation(fields: [siteId], references: [id])
+  location     Location?    @relation(fields: [locationId], references: [id])
+  model        DeviceModel  @relation(fields: [modelId], references: [id])
+
+  @@unique([organizationId, assetTag])
+  @@index([organizationId, siteId])
+  @@index([organizationId, status])
+  @@map("assets")
+}
+
+// ---------------------------------------------------------------------------
+// Audit trail (append-only)
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String?     @map("organization_id") @db.Uuid
+  userId         String?     @map("user_id") @db.Uuid
+  entity         String
+  entityId       String?     @map("entity_id")
+  action         AuditAction
+  before         Json?
+  after          Json?
+  ipAddress      String?     @map("ip_address")
+  at             DateTime    @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, entity, entityId])
+  @@index([organizationId, at])
+  @@map("audit_logs")
+}

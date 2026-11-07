@@ -1,0 +1,36 @@
+{
+  "name": "medequip",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MedEquip - medical equipment management system (CMMS) for hospitals and hospital fleets",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "prettier --check .",
+    "format": "prettier --write .",
+    "db:generate": "pnpm --filter @medequip/db run generate",
+    "db:migrate": "pnpm --filter @medequip/db run migrate",
+    "db:deploy": "pnpm --filter @medequip/db run migrate:deploy",
+    "db:seed": "pnpm --filter @medequip/db run seed"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.3.3",
+    "typescript": "^5.6.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
+  }
+}

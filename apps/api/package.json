@@ -1,0 +1,47 @@
+{
+  "name": "@medequip/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MedEquip REST API (NestJS)",
+  "scripts": {
+    "dev": "nest start --watch --preserveWatchOutput",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@medequip/db": "workspace:*",
+    "@medequip/shared": "workspace:*",
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/platform-express": "^11.0.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/testing": "^11.0.1",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.2",
+    "@types/supertest": "^6.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.6.3"
+  },
+  "jest": {
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "moduleFileExtensions": [
+      "ts",
+      "js",
+      "json"
+    ],
+    "transform": {
+      "^.+\\.ts$": "ts-jest"
+    },
+    "testEnvironment": "node"
+  }
+}
