@@ -2,11 +2,11 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@medequip/db';
 
 /**
- * Database client. Prisma connects lazily on the first query, so the API
- * can start (and report health) even when the database is not yet reachable.
+ * SYSTEM database client (owner role, DATABASE_URL). Row-Level Security does not apply.
  *
- * TODO(tenancy): add a per-request tenant context and PostgreSQL Row-Level
- * Security (SET app.organization_id) before any tenant data endpoints ship.
+ * Only for trusted system work that runs before a tenant is known or across tenants:
+ * authentication (login, sessions, guard), plan/entitlement lookups, health checks.
+ * Tenant data in feature modules must go through TenantPrismaService.
  */
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleDestroy {

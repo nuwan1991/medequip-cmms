@@ -12,6 +12,12 @@ export function validateEnv(env: Record<string, unknown>): Record<string, unknow
   if (env.NODE_ENV === 'production' && secret.startsWith('dev-only')) {
     throw new Error('JWT_SECRET is still the development placeholder - set a real secret');
   }
+  if (env.NODE_ENV === 'production' && !env.APP_DATABASE_URL) {
+    throw new Error(
+      'APP_DATABASE_URL (restricted medequip_app role) is required in production so that ' +
+        'Row-Level Security protects tenant data',
+    );
+  }
   return env;
 }
 
