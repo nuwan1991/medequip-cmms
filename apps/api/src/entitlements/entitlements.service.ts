@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, Optional } from '@nestjs/common';
 import {
   ALWAYS_ALLOWED,
   type AlwaysAllowedKey,
@@ -6,6 +6,7 @@ import {
   type LimitKey,
   type PlanEntitlements,
 } from '@medequip/shared';
+import { PrismaService } from '../prisma/prisma.service';
 
 /** Tenant status values that put the organization into restricted mode. */
 const RESTRICTED_STATUSES = ['READ_ONLY', 'SUSPENDED', 'CLOSED'] as const;
@@ -22,6 +23,24 @@ export interface TenantEntitlementContext {
  */
 @Injectable()
 export class EntitlementsService {
+  constructor(@Optional() private readonly prisma?: PrismaService) {}
+
+  /** Load the organization's plan, overrides and status from the database. */
+  async forOrganization(organizationId: string): Promise<TenantEntitlementContext> {
+    if (!this.prisma) throw new Error('EntitlementsService needs PrismaService for this call');
+    const org = await this.prisma.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      include: { plan: true },
+    });
+    return {
+      status: org.status,
+      entitlements: this.merge(
+        org.plan.entitlements as unknown as PlanEntitlements,
+        org.entitlementOverrides as Partial<PlanEntitlements> | null,
+      ),
+    };
+  }
+
   /** Merge plan defaults with per-tenant overrides (custom deals, promos). */
   merge(plan: PlanEntitlements, overrides?: Partial<PlanEntitlements> | null): PlanEntitlements {
     return {

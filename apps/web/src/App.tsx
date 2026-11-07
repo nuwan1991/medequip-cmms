@@ -1,77 +1,47 @@
-import { useEffect, useState } from 'react';
-import { DEFAULT_PLANS } from '@medequip/shared';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import type { Permission } from '@medequip/shared';
+import { AuthProvider, useAuth } from './auth/AuthContext';
+import { Layout } from './components/Layout';
+import { LoginPage } from './pages/LoginPage';
+import { ChangePasswordPage } from './pages/ChangePasswordPage';
+import { HomePage } from './pages/HomePage';
+import { UsersPage } from './pages/UsersPage';
 
-type ApiState = 'checking' | 'online' | 'offline';
+/** Requires a signed-in user; sends users who must change their password to that page. */
+function RequireAuth() {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return <p className="center muted">Loading…</p>;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (user.mustChangePassword && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />;
+  }
+  return <Outlet />;
+}
 
-const MODULES = [
-  'Asset Register',
-  'Work Orders',
-  'Preventive Maintenance',
-  'Calibration & Safety',
-  'Spare Parts',
-  'Contracts & Vendors',
-  'Recalls & Alerts',
-  'Reports & KPIs',
-];
+function RequirePermission({ permission }: { permission: Permission }) {
+  const { can } = useAuth();
+  return can(permission) ? <Outlet /> : <Navigate to="/" replace />;
+}
 
 export function App() {
-  const [api, setApi] = useState<ApiState>('checking');
-
-  useEffect(() => {
-    fetch('/api/health')
-      .then((r) => (r.ok ? setApi('online') : setApi('offline')))
-      .catch(() => setApi('offline'));
-  }, []);
-
   return (
-    <div className="layout">
-      <header className="topbar">
-        <strong>MedEquip</strong>
-        <span className={`status status-${api}`}>API: {api}</span>
-      </header>
-
-      <main className="content">
-        <h1>Medical Equipment Management</h1>
-        <p className="muted">
-          Starter shell. Modules below will be built one at a time - see docs/roadmap.md.
-        </p>
-
-        <section>
-          <h2>Modules</h2>
-          <div className="grid">
-            {MODULES.map((m) => (
-              <div key={m} className="card">
-                {m}
-                <span className="badge">planned</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section>
-          <h2>Plans</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Plan</th>
-                <th>Assets</th>
-                <th>Sites</th>
-                <th>Users</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DEFAULT_PLANS.map((p) => (
-                <tr key={p.code}>
-                  <td>{p.name}</td>
-                  <td>{p.entitlements.limits.maxAssets ?? 'Unlimited'}</td>
-                  <td>{p.entitlements.limits.maxSites ?? 'Unlimited'}</td>
-                  <td>{p.entitlements.limits.maxUsers ?? 'Unlimited'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      </main>
-    </div>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<RequireAuth />}>
+            <Route path="/change-password" element={<ChangePasswordPage />} />
+            <Route element={<Layout />}>
+              <Route index element={<HomePage />} />
+              <Route element={<RequirePermission permission="users:read" />}>
+                <Route path="/users" element={<UsersPage />} />
+              </Route>
+            </Route>
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

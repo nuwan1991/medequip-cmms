@@ -80,6 +80,9 @@ enum AuditAction {
   DELETE
   RESTORE
   LOGIN
+  LOGIN_FAILED
+  LOGOUT
+  PASSWORD_CHANGE
   EXPORT
 }
 
@@ -103,20 +106,20 @@ model Plan {
 }
 
 model Organization {
-  id          String             @id @default(uuid()) @db.Uuid
-  name        String
-  slug        String             @unique
-  planId      String             @map("plan_id") @db.Uuid
-  status      OrganizationStatus @default(TRIAL)
-  trialEndsAt DateTime?          @map("trial_ends_at")
+  id                   String             @id @default(uuid()) @db.Uuid
+  name                 String
+  slug                 String             @unique
+  planId               String             @map("plan_id") @db.Uuid
+  status               OrganizationStatus @default(TRIAL)
+  trialEndsAt          DateTime?          @map("trial_ends_at")
   /// Data residency region, e.g. "local", "eu", "me", "ap"
-  region      String             @default("local")
+  region               String             @default("local")
   /// Per-tenant overrides of plan entitlements (custom deals, promos)
-  entitlementOverrides Json?     @map("entitlement_overrides")
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
-  version     Int                @default(1)
-  deletedAt   DateTime?          @map("deleted_at")
+  entitlementOverrides Json?              @map("entitlement_overrides")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+  version              Int                @default(1)
+  deletedAt            DateTime?          @map("deleted_at")
 
   plan          Plan           @relation(fields: [planId], references: [id])
   sites         Site[]
@@ -126,6 +129,7 @@ model Organization {
   deviceModels  DeviceModel[]
   assets        Asset[]
   auditLogs     AuditLog[]
+  sessions      Session[]
 
   @@map("organizations")
 }
@@ -153,25 +157,56 @@ model Site {
 }
 
 model User {
-  id             String     @id @default(uuid()) @db.Uuid
-  organizationId String     @map("organization_id") @db.Uuid
-  email          String
-  name           String
-  role           Role       @default(VIEWER)
-  status         UserStatus @default(INVITED)
+  id                 String     @id @default(uuid()) @db.Uuid
+  organizationId     String     @map("organization_id") @db.Uuid
+  email              String
+  name               String
+  role               Role       @default(VIEWER)
+  status             UserStatus @default(INVITED)
   /// Null when authentication is delegated to SSO / external identity provider
-  passwordHash   String?    @map("password_hash")
-  lastLoginAt    DateTime?  @map("last_login_at")
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
-  version        Int        @default(1)
-  deletedAt      DateTime?  @map("deleted_at")
+  passwordHash       String?    @map("password_hash")
+  /// Forces a password change at next login (new users, admin resets)
+  mustChangePassword Boolean    @default(false) @map("must_change_password")
+  passwordChangedAt  DateTime?  @map("password_changed_at")
+  failedLoginCount   Int        @default(0) @map("failed_login_count")
+  lockedUntil        DateTime?  @map("locked_until")
+  lastLoginAt        DateTime?  @map("last_login_at")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+  version            Int        @default(1)
+  deletedAt          DateTime?  @map("deleted_at")
 
   organization Organization @relation(fields: [organizationId], references: [id])
+  sessions     Session[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
   @@map("users")
+}
+
+/// Login session. Holds the hash of the current refresh token (rotated on every refresh).
+/// Access tokens carry the session id, so revoking a session logs the user out immediately.
+model Session {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  tokenHash         String    @unique @map("token_hash")
+  /// Previous refresh token hash - used to detect token reuse (theft) after rotation
+  previousTokenHash String?   @map("previous_token_hash")
+  rotatedAt         DateTime? @map("rotated_at")
+  expiresAt         DateTime  @map("expires_at")
+  revokedAt         DateTime? @map("revoked_at")
+  lastUsedAt        DateTime  @default(now()) @map("last_used_at")
+  ipAddress         String?   @map("ip_address")
+  userAgent         String?   @map("user_agent")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([previousTokenHash])
+  @@map("sessions")
 }
 
 // ---------------------------------------------------------------------------
