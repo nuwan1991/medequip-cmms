@@ -62,7 +62,7 @@ interface RequestOptions {
   body?: unknown;
 }
 
-export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function request(path: string, options: RequestOptions = {}): Promise<Response> {
   const send = () =>
     fetch(`/api${path}`, {
       method: options.method ?? 'GET',
@@ -92,8 +92,34 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
       res.statusText;
     throw new ApiError(res.status, body.code, message, body);
   }
+  return res;
+}
+
+export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const res = await request(path, options);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/** Download a file from the API (the access token cannot be sent by a plain link). */
+export async function download(path: string, filename: string): Promise<void> {
+  const blob = await (await request(path)).blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Build a query string, skipping empty values. */
+export function qs(params: Record<string, string | number | undefined | null>): string {
+  const search = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') search.set(k, String(v));
+  }
+  const s = search.toString();
+  return s ? `?${s}` : '';
 }
 
 export function errorMessage(err: unknown): string {

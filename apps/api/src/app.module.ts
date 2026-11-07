@@ -9,6 +9,11 @@ import { EntitlementsModule } from './entitlements/entitlements.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { SitesModule } from './sites/sites.module';
+import { LocationsModule } from './locations/locations.module';
+import { LibraryModule } from './library/library.module';
+import { AssetsModule } from './assets/assets.module';
+import { OrganizationModule } from './organization/organization.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { PermissionsGuard } from './auth/permissions.guard';
 
@@ -30,6 +35,11 @@ import { PermissionsGuard } from './auth/permissions.guard';
     HealthModule,
     AuthModule,
     UsersModule,
+    OrganizationModule,
+    SitesModule,
+    LocationsModule,
+    LibraryModule,
+    AssetsModule,
   ],
   providers: [
     // Order matters: rate limit → authenticate (every route unless @Public) → permissions.

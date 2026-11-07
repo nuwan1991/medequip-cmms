@@ -9,7 +9,7 @@ export function Layout() {
 
   return (
     <div className="layout">
-      <header className="topbar">
+      <header className="topbar no-print">
         <div className="topbar-left">
           <strong>MedEquip</strong>
           <span className="org">{user.organization.name}</span>
@@ -17,6 +17,9 @@ export function Layout() {
             <NavLink to="/" end>
               Home
             </NavLink>
+            {can('assets:read') && <NavLink to="/assets">Assets</NavLink>}
+            {can('assets:read') && <NavLink to="/locations">Locations</NavLink>}
+            {can('assets:read') && <NavLink to="/library">Device library</NavLink>}
             {can('users:read') && <NavLink to="/users">Users</NavLink>}
           </nav>
         </div>
