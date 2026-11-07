@@ -28,6 +28,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://medequip:medequip@localhost:5432/medequip?schema=public
+      JWT_SECRET: ci-only-secret-ci-only-secret-0123456789abcdef
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -39,8 +40,9 @@ jobs:
       - run: pnpm lint
       - run: pnpm build
       - run: pnpm typecheck
-      - run: pnpm test
       - name: Apply migrations and seed
         run: |
           pnpm db:deploy
           pnpm db:seed
+      # Includes end-to-end API tests against the PostgreSQL service
+      - run: pnpm test

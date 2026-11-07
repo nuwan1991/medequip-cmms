@@ -4,6 +4,7 @@
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { DEFAULT_PLANS } from '@medequip/shared';
+import { hashPassword } from '../src/password';
 
 const prisma = new PrismaClient();
 
@@ -39,7 +40,13 @@ async function main() {
     create: { organizationId: org.id, name: 'Main Campus', code: 'MAIN' },
   });
 
-  await prisma.user.upsert({
+  // Demo admin login. The password comes from SEED_ADMIN_PASSWORD; a dev-only default is
+  // allowed outside production, and the user must change it at first login.
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (!adminPassword && process.env.NODE_ENV === 'production') {
+    throw new Error('SEED_ADMIN_PASSWORD is required in production');
+  }
+  const admin = await prisma.user.upsert({
     where: { organizationId_email: { organizationId: org.id, email: 'admin@demo.local' } },
     update: {},
     create: {
@@ -50,6 +57,15 @@ async function main() {
       status: 'ACTIVE',
     },
   });
+  if (!admin.passwordHash) {
+    await prisma.user.update({
+      where: { id: admin.id },
+      data: {
+        passwordHash: await hashPassword(adminPassword || 'ChangeMe-2026!'),
+        mustChangePassword: true,
+      },
+    });
+  }
 
   const existingAsset = await prisma.asset.findUnique({
     where: { organizationId_assetTag: { organizationId: org.id, assetTag: 'BME-0001' } },

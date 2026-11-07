@@ -26,6 +26,24 @@ Phase 3 – Hybrid:                     cloud central (API, DB, analytics, SSO)
 - **S3-compatible storage:** MinIO locally, S3/Azure Blob in cloud.
 - **Containers:** Docker Compose for dev/on-prem; Kubernetes/k3s later.
 
+## Authentication & authorization (implemented)
+
+- **Login:** organization slug + email + password (`POST /api/auth/login`). Passwords hashed
+  with scrypt (`packages/db/src/password.ts`). Same error for every failure, constant-time
+  comparison even for unknown users. 5 failed attempts → 15 min lockout. Rate-limited.
+- **Tokens:** short-lived JWT access token (15 min, in memory in the web app) carrying
+  `sub` (user), `org`, `sid` (session). Refresh token is random, stored only as a SHA-256 hash
+  in `sessions`, sent as an httpOnly `SameSite=Strict` cookie on `/api/auth`, rotated on every
+  refresh. Replaying an old refresh token (after a 30 s grace for tab races) revokes the session.
+- **Every request** (`JwtAuthGuard`) verifies the JWT and loads the session + user, so logout,
+  disabling a user and role changes take effect immediately. `@Public()` opts out.
+- **Permissions:** roles map to permissions in `packages/shared/src/permissions.ts`; endpoints
+  declare `@RequirePermissions(...)`, enforced by `PermissionsGuard`.
+- **Forced password change:** `mustChangePassword` users can only call routes marked
+  `@AllowPendingPasswordChange()` (me, change-password).
+- **Safeguards:** admins cannot change/remove their own access; an organization always keeps
+  one active admin; user seats are checked against the plan (`maxUsers`).
+
 ## Tenant isolation plan (to implement before tenant data endpoints)
 
 1. Auth resolves the user → `organizationId` per request (request-scoped context).
@@ -38,7 +56,7 @@ Phase 3 – Hybrid:                     cloud central (API, DB, analytics, SSO)
 
 ```
 Plan ─< Organization ─< Site ─< Location (tree) ─< Asset
-Organization ─< User
+Organization ─< User ─< Session
 Manufacturer ─< DeviceModel ─< Asset          (org NULL = shared library)
 AuditLog (append-only)
 ```

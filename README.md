@@ -27,7 +27,9 @@ pnpm db:seed
 pnpm dev
 ```
 
-- Web app: http://localhost:5173
+- Web app: http://localhost:5173. Demo sign-in: organization `demo-hospital`,
+  email `admin@demo.local`, password `ChangeMe-2026!` (or `SEED_ADMIN_PASSWORD`).
+  You will be asked to change it at first sign-in.
 - API health: http://localhost:3000/api/health (database check: `/api/health/db`)
 - MinIO console: http://localhost:9001
 

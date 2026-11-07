@@ -106,3 +106,172 @@ td {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
 }
+
+/* ---- Layout & navigation ---- */
+.topbar {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.topbar-left,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.topbar .org {
+  opacity: 0.85;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 12px;
+}
+
+.topbar nav a {
+  color: #fff;
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+.topbar nav a.active {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.topbar .link {
+  color: #fff;
+}
+
+.center {
+  text-align: center;
+  margin-top: 20vh;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---- Forms ---- */
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+input,
+select {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+button {
+  font: inherit;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+button.link {
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+button.link.danger {
+  color: var(--bad);
+}
+
+.error {
+  color: var(--bad);
+}
+
+.notice {
+  background: rgba(11, 110, 153, 0.1);
+  border-left: 3px solid var(--accent);
+  padding: 8px 12px;
+}
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-card h1 {
+  margin: 0;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.span-all {
+  grid-column: 1 / -1;
+}
+
+.row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+/* ---- Tables ---- */
+.table-wrap {
+  overflow-x: auto;
+}
+
+td.actions {
+  white-space: nowrap;
+}
+
+td.actions .link + .link {
+  margin-left: 12px;
+}
+
+tr.dim td {
+  opacity: 0.55;
+}

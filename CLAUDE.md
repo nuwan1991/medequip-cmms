@@ -36,8 +36,12 @@ docs/           requirements, architecture, ADRs, roadmap
    limit or payment status.
 6. **No patient data** in core tables.
 7. **Secrets only from environment variables.** Never commit `.env` or credentials.
-8. Validation schemas live in `packages/shared` and are reused by API and web.
-9. Enums in `schema.prisma` and `packages/shared` must stay in sync.
+8. **Every endpoint is authenticated by default.** Use `@RequirePermissions(...)` on every
+   route (permissions in `packages/shared/src/permissions.ts`); use `@Public()` only for
+   health/auth routes. Take the tenant from `@CurrentUser().organizationId` - never from
+   request bodies or query strings.
+9. Validation schemas live in `packages/shared` and are reused by API and web.
+10. Enums in `schema.prisma` and `packages/shared` must stay in sync.
 
 ## Conventions
 
@@ -45,6 +49,8 @@ docs/           requirements, architecture, ADRs, roadmap
 - Each feature = NestJS module (`apps/api/src/<module>/`) + Prisma migration + tests +
   web screens + docs update.
 - API tests: Jest (`*.spec.ts`). Shared/web tests: Vitest (`*.test.ts`).
+  `*.e2e.spec.ts` tests run against a real database when `DATABASE_URL` is set
+  (run `pnpm db:deploy` first); they create and clean up their own organizations.
 - Database changes: edit `schema.prisma`, then `pnpm db:migrate --name <change>`;
   commit the generated migration. Never edit an applied migration.
 - Conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`.
