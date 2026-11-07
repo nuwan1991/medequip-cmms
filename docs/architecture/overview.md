@@ -44,13 +44,29 @@ Phase 3 – Hybrid:                     cloud central (API, DB, analytics, SSO)
 - **Safeguards:** admins cannot change/remove their own access; an organization always keeps
   one active admin; user seats are checked against the plan (`maxUsers`).
 
-## Tenant isolation plan (to implement before tenant data endpoints)
+## Tenant isolation (implemented: PostgreSQL Row-Level Security)
 
-1. Auth resolves the user → `organizationId` per request (request-scoped context).
-2. API wraps queries in a transaction that runs `SET LOCAL app.organization_id = '<id>'`.
-3. RLS policies on tenant tables: `organization_id = current_setting('app.organization_id')::uuid`
-   (shared library rows: `organization_id IS NULL` readable by all).
-4. App DB role has no `BYPASSRLS`; migrations run with a separate owner role.
+Two layers: the API always filters by `organizationId`, **and** the database refuses to show or
+accept other organizations' rows even if a query forgets that filter.
+
+| Database role      | Used by                                                                             | RLS applies?     |
+| ------------------ | ----------------------------------------------------------------------------------- | ---------------- |
+| owner (`medequip`) | migrations, seed, API system work (`PrismaService`: login, sessions, plans, health) | No (table owner) |
+| `medequip_app`     | API tenant data (`TenantPrismaService`)                                             | **Yes**          |
+
+- `TenantPrismaService.run(orgId, tx => ...)` opens a transaction and runs
+  `set_config('app.organization_id', orgId, true)` (transaction-local, safe with pooling).
+- Policies compare `organization_id = app_current_org()`. No setting → no rows (fails closed).
+- Shared device library: rows with `organization_id IS NULL` are readable by all tenants,
+  writable by none of them.
+- `medequip_app` has **no DELETE** on business tables (soft delete only) and only
+  SELECT/INSERT on `audit_logs` (append-only).
+- Foreign keys are checked without RLS, so services must still verify that referenced ids
+  (site, location, model) are visible in the tenant transaction before using them.
+- A test fails if any table with `organization_id` lacks RLS.
+
+**Adding a tenant table:** in its migration, `ENABLE ROW LEVEL SECURITY`, add the
+`tenant_isolation` policy and `GRANT SELECT, INSERT, UPDATE ... TO medequip_app`.
 
 ## Core data model (current)
 

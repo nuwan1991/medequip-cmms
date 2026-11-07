@@ -25,8 +25,12 @@ docs/           requirements, architecture, ADRs, roadmap
 ## Non-negotiable rules
 
 1. **Tenant isolation.** Every tenant-owned table has `organization_id` (and `site_id` when it
-   belongs to a hospital). Every query must be scoped to the current organization. PostgreSQL
-   Row-Level Security will be enforced (see roadmap) – never bypass it.
+   belongs to a hospital). Tenant data is read/written only through
+   `TenantPrismaService.run(orgId, tx => ...)` (restricted DB role + Row-Level Security).
+   `PrismaService` (owner role, bypasses RLS) is only for auth/system code. Every new tenant
+   table's migration must enable RLS, add the `tenant_isolation` policy and grant
+   SELECT/INSERT/UPDATE to `medequip_app` (see docs/architecture/overview.md). Verify
+   referenced ids (site, location, model, ...) inside the tenant transaction.
 2. **UUID primary keys** and sync columns on business tables: `created_at`, `updated_at`,
    `version`, `deleted_at` (soft delete – never hard-delete business records).
 3. **Audit everything.** Every create/update/delete of business data writes to `audit_logs`.

@@ -27,6 +27,9 @@ pnpm db:seed
 pnpm dev
 ```
 
+> Upgrading an existing local database created before Row-Level Security? Create the app
+> role once: `docker compose -f infra/docker-compose.yml exec postgres psql -U medequip -c "CREATE ROLE medequip_app LOGIN PASSWORD 'medequip_app'"`
+
 - Web app: http://localhost:5173. Demo sign-in: organization `demo-hospital`,
   email `admin@demo.local`, password `ChangeMe-2026!` (or `SEED_ADMIN_PASSWORD`).
   You will be asked to change it at first sign-in.

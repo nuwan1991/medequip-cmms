@@ -28,6 +28,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://medequip:medequip@localhost:5432/medequip?schema=public
+      APP_DATABASE_URL: postgresql://medequip_app:medequip_app@localhost:5432/medequip?schema=public
       JWT_SECRET: ci-only-secret-ci-only-secret-0123456789abcdef
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +41,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm build
       - run: pnpm typecheck
+      - name: Create restricted app role (as infra/postgres/init.sql does locally)
+        run: psql postgresql://medequip:medequip@localhost:5432/medequip -c "CREATE ROLE medequip_app LOGIN PASSWORD 'medequip_app'"
       - name: Apply migrations and seed
         run: |
           pnpm db:deploy

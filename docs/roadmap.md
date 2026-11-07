@@ -14,7 +14,7 @@
 - [x] User management (admin): create, change role, disable, reset password, remove; plan user limit
 - [x] Forced password change for new users / resets
 - [x] Audit log for logins, logouts, password changes and user changes
-- [ ] PostgreSQL Row-Level Security (database-level tenant isolation)
+- [x] PostgreSQL Row-Level Security (database-level tenant isolation)
 - [ ] Audit log interceptor (automatic on create/update/delete for all modules)
 - [ ] Email invitations and self-service "forgot password" (needs email service)
 - [ ] MFA (TOTP) for admins; SSO (OIDC) for Fleet/Enterprise plans

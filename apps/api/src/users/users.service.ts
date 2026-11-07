@@ -11,7 +11,7 @@ import type {
   UserDto,
   UserUpdateInput,
 } from '@medequip/shared';
-import { PrismaService } from '../prisma/prisma.service';
+import { TenantPrismaService, type TenantTx } from '../prisma/tenant-prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 import type { ClientMeta, RequestUser } from '../common/request';
@@ -26,36 +26,40 @@ const countsTowardLimit = (organizationId: string): Prisma.UserWhereInput => ({
 @Injectable()
 export class UsersService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: TenantPrismaService,
     private readonly audit: AuditService,
     private readonly entitlements: EntitlementsService,
   ) {}
 
   async list(actor: RequestUser): Promise<UserDto[]> {
-    const users = await this.prisma.user.findMany({
-      where: { organizationId: actor.organizationId, deletedAt: null },
-      orderBy: [{ name: 'asc' }],
-    });
+    const users = await this.db.run(actor.organizationId, (tx) =>
+      tx.user.findMany({
+        where: { organizationId: actor.organizationId, deletedAt: null },
+        orderBy: [{ name: 'asc' }],
+      }),
+    );
     return users.map(toUserDto);
   }
 
   async create(actor: RequestUser, input: UserCreateInput, meta: ClientMeta): Promise<UserDto> {
-    await this.assertSeatAvailable(actor.organizationId);
-
-    const existing = await this.prisma.user.findUnique({
-      where: { organizationId_email: { organizationId: actor.organizationId, email: input.email } },
-    });
-    if (existing) {
-      throw new ConflictException({
-        code: 'EMAIL_EXISTS',
-        message: existing.deletedAt
-          ? 'A removed user with this email exists. Contact support to restore it.'
-          : 'A user with this email already exists',
-      });
-    }
-
     const passwordHash = await hashPassword(input.password);
-    const user = await this.prisma.$transaction(async (tx) => {
+    const user = await this.db.run(actor.organizationId, async (tx) => {
+      await this.assertSeatAvailable(tx, actor.organizationId);
+
+      const existing = await tx.user.findUnique({
+        where: {
+          organizationId_email: { organizationId: actor.organizationId, email: input.email },
+        },
+      });
+      if (existing) {
+        throw new ConflictException({
+          code: 'EMAIL_EXISTS',
+          message: existing.deletedAt
+            ? 'A removed user with this email exists. Contact support to restore it.'
+            : 'A user with this email already exists',
+        });
+      }
+
       const created = await tx.user.create({
         data: {
           organizationId: actor.organizationId,
@@ -90,28 +94,28 @@ export class UsersService {
     input: UserUpdateInput,
     meta: ClientMeta,
   ): Promise<UserDto> {
-    const user = await this.findInOrg(actor, id);
+    const updated = await this.db.run(actor.organizationId, async (tx) => {
+      const user = await this.findInOrg(tx, actor, id);
 
-    const roleChanges = input.role !== undefined && input.role !== user.role;
-    const statusChanges = input.status !== undefined && input.status !== user.status;
-    if (id === actor.userId && (roleChanges || statusChanges)) {
-      throw new BadRequestException({
-        code: 'CANNOT_CHANGE_OWN_ACCESS',
-        message: 'You cannot change your own role or status. Ask another admin.',
-      });
-    }
+      const roleChanges = input.role !== undefined && input.role !== user.role;
+      const statusChanges = input.status !== undefined && input.status !== user.status;
+      if (id === actor.userId && (roleChanges || statusChanges)) {
+        throw new BadRequestException({
+          code: 'CANNOT_CHANGE_OWN_ACCESS',
+          message: 'You cannot change your own role or status. Ask another admin.',
+        });
+      }
 
-    const losesAdmin =
-      user.role === 'ORG_ADMIN' &&
-      user.status === 'ACTIVE' &&
-      ((roleChanges && input.role !== 'ORG_ADMIN') || input.status === 'DISABLED');
-    if (losesAdmin) await this.assertAnotherAdmin(actor.organizationId, user.id);
+      const losesAdmin =
+        user.role === 'ORG_ADMIN' &&
+        user.status === 'ACTIVE' &&
+        ((roleChanges && input.role !== 'ORG_ADMIN') || input.status === 'DISABLED');
+      if (losesAdmin) await this.assertAnotherAdmin(tx, actor.organizationId, user.id);
 
-    if (user.status === 'DISABLED' && input.status === 'ACTIVE') {
-      await this.assertSeatAvailable(actor.organizationId);
-    }
+      if (user.status === 'DISABLED' && input.status === 'ACTIVE') {
+        await this.assertSeatAvailable(tx, actor.organizationId);
+      }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.user.update({
         where: { id: user.id },
         data: { ...input, version: { increment: 1 } },
@@ -137,18 +141,18 @@ export class UsersService {
 
   /** Soft delete: the user disappears from lists and cannot sign in; history is kept. */
   async remove(actor: RequestUser, id: string, meta: ClientMeta): Promise<void> {
-    const user = await this.findInOrg(actor, id);
-    if (id === actor.userId) {
-      throw new BadRequestException({
-        code: 'CANNOT_REMOVE_SELF',
-        message: 'You cannot remove your own account',
-      });
-    }
-    if (user.role === 'ORG_ADMIN' && user.status === 'ACTIVE') {
-      await this.assertAnotherAdmin(actor.organizationId, user.id);
-    }
+    await this.db.run(actor.organizationId, async (tx) => {
+      const user = await this.findInOrg(tx, actor, id);
+      if (id === actor.userId) {
+        throw new BadRequestException({
+          code: 'CANNOT_REMOVE_SELF',
+          message: 'You cannot remove your own account',
+        });
+      }
+      if (user.role === 'ORG_ADMIN' && user.status === 'ACTIVE') {
+        await this.assertAnotherAdmin(tx, actor.organizationId, user.id);
+      }
 
-    await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: user.id },
         data: { status: 'DISABLED', deletedAt: new Date(), version: { increment: 1 } },
@@ -176,10 +180,10 @@ export class UsersService {
     input: PasswordResetInput,
     meta: ClientMeta,
   ): Promise<void> {
-    const user = await this.findInOrg(actor, id);
     const passwordHash = await hashPassword(input.password);
 
-    await this.prisma.$transaction(async (tx) => {
+    await this.db.run(actor.organizationId, async (tx) => {
+      const user = await this.findInOrg(tx, actor, id);
       await tx.user.update({
         where: { id: user.id },
         data: {
@@ -206,22 +210,26 @@ export class UsersService {
     });
   }
 
-  private async findInOrg(actor: RequestUser, id: string): Promise<User> {
-    const user = await this.prisma.user.findFirst({
+  private async findInOrg(tx: TenantTx, actor: RequestUser, id: string): Promise<User> {
+    const user = await tx.user.findFirst({
       where: { id, organizationId: actor.organizationId, deletedAt: null },
     });
     if (!user) throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
     return user;
   }
 
-  private async assertSeatAvailable(organizationId: string): Promise<void> {
+  private async assertSeatAvailable(tx: TenantTx, organizationId: string): Promise<void> {
     const ctx = await this.entitlements.forOrganization(organizationId);
-    const count = await this.prisma.user.count({ where: countsTowardLimit(organizationId) });
+    const count = await tx.user.count({ where: countsTowardLimit(organizationId) });
     this.entitlements.assertWithinLimit(ctx, 'maxUsers', count);
   }
 
-  private async assertAnotherAdmin(organizationId: string, excludeUserId: string): Promise<void> {
-    const others = await this.prisma.user.count({
+  private async assertAnotherAdmin(
+    tx: TenantTx,
+    organizationId: string,
+    excludeUserId: string,
+  ): Promise<void> {
+    const others = await tx.user.count({
       where: {
         organizationId,
         role: 'ORG_ADMIN',
@@ -238,7 +246,7 @@ export class UsersService {
     }
   }
 
-  private revokeSessions(tx: Prisma.TransactionClient, userId: string) {
+  private revokeSessions(tx: TenantTx, userId: string) {
     return tx.session.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
