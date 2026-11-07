@@ -6,6 +6,11 @@ import { LoginPage } from './pages/LoginPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { HomePage } from './pages/HomePage';
 import { UsersPage } from './pages/UsersPage';
+import { AssetsPage } from './pages/AssetsPage';
+import { AssetFormPage } from './pages/AssetFormPage';
+import { AssetDetailPage } from './pages/AssetDetailPage';
+import { LocationsPage } from './pages/LocationsPage';
+import { LibraryPage } from './pages/LibraryPage';
 
 /** Requires a signed-in user; sends users who must change their password to that page. */
 function RequireAuth() {
@@ -34,6 +39,16 @@ export function App() {
             <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route element={<Layout />}>
               <Route index element={<HomePage />} />
+              <Route element={<RequirePermission permission="assets:read" />}>
+                <Route path="/assets" element={<AssetsPage />} />
+                <Route path="/assets/:id" element={<AssetDetailPage />} />
+                <Route path="/locations" element={<LocationsPage />} />
+                <Route path="/library" element={<LibraryPage />} />
+              </Route>
+              <Route element={<RequirePermission permission="assets:write" />}>
+                <Route path="/assets/new" element={<AssetFormPage />} />
+                <Route path="/assets/:id/edit" element={<AssetFormPage />} />
+              </Route>
               <Route element={<RequirePermission permission="users:read" />}>
                 <Route path="/users" element={<UsersPage />} />
               </Route>

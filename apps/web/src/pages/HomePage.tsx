@@ -1,5 +1,8 @@
+import { Link } from 'react-router-dom';
 import { DEFAULT_PLANS } from '@medequip/shared';
 import { useAuth } from '../auth/AuthContext';
+
+const AVAILABLE: Record<string, string> = { 'Asset Register': '/assets' };
 
 const MODULES = [
   'Asset Register',
@@ -28,8 +31,8 @@ export function HomePage() {
         <div className="grid">
           {MODULES.map((m) => (
             <div key={m} className="card">
-              {m}
-              <span className="badge">planned</span>
+              {AVAILABLE[m] ? <Link to={AVAILABLE[m]}>{m}</Link> : m}
+              <span className="badge">{AVAILABLE[m] ? 'available' : 'planned'}</span>
             </div>
           ))}
         </div>

@@ -32,7 +32,7 @@ describe('assetCreateSchema', () => {
     const parsed = assetCreateSchema.parse(valid);
     expect(parsed.assetTag).toBe('BME-0001');
     expect(parsed.status).toBe('IN_SERVICE');
-    expect(parsed.riskLevel).toBe('MEDIUM');
+    expect(parsed.riskLevel).toBeUndefined(); // defaults to the model's risk level in the API
   });
 
   it('rejects an empty asset tag', () => {

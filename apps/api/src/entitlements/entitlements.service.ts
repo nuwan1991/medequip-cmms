@@ -98,6 +98,23 @@ export class EntitlementsService {
     }
   }
 
+  /** Blocks changes when the organization is read-only/suspended (reading stays allowed). */
+  assertWritable(ctx: TenantEntitlementContext): void {
+    if (this.isRestricted(ctx)) {
+      throw new ForbiddenException({
+        code: 'ACCOUNT_RESTRICTED',
+        message: 'Your account is read-only. Existing data remains available and exportable.',
+      });
+    }
+  }
+
+  /** Convenience: load the organization and assert it can make changes. */
+  async assertOrgWritable(organizationId: string): Promise<TenantEntitlementContext> {
+    const ctx = await this.forOrganization(organizationId);
+    this.assertWritable(ctx);
+    return ctx;
+  }
+
   /** Usage ratio 0..1 for "you are using 240 of 300 assets" banners (null = unlimited). */
   usage(ctx: TenantEntitlementContext, limit: LimitKey, currentCount: number): number | null {
     const max = ctx.entitlements.limits[limit];

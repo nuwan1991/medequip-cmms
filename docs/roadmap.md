@@ -23,9 +23,10 @@
 
 ## MVP (pilot in one hospital)
 
-- [ ] Locations (site → building → department → room)
-- [ ] Device library (manufacturers, models)
-- [ ] Asset register + QR label printing
+- [x] Locations (site → building → department → room) and sites (plan site limit)
+- [x] Device library (shared global + organization's own manufacturers/models)
+- [x] Asset register: search/filters, add/edit (optimistic locking), history, CSV export, QR label printing
+- [ ] Bulk QR label sheets, asset photos/documents, parent/child assets
 - [ ] Corrective work orders + fault reporting by QR scan
 - [ ] Preventive maintenance schedules and checklists
 - [ ] Dashboard + basic KPIs
